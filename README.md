@@ -18,6 +18,8 @@ A static clippings site that collects links, tweets, images, videos, and notes a
 
 `clips.rajjoshi.me` is a static clippings site. Each clip is a single markdown file in the repo, rendered by Astro into a feed of cards and individual permalink pages. There is no database, backend, or runtime service — the repo's content collection is the source of truth and Astro generates a static site from it.
 
+The `/inbox` page is a separate browser-local reading queue. It accepts a JSON list of saved links, keeps at most five active reads, and lets you move items among reading, reference, watch, done, and let-go views. Its data lives in that browser's local storage, not in the markdown collection or the generated site. Use **Export JSON backup** before clearing site data or changing browsers; import that file on another device to move your queue. The inbox opens original links for reading and does not sync X or fetch article text.
+
 ## Tech Stack
 
 - [Astro 5](https://astro.build) — static pages and content collections

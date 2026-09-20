@@ -9,7 +9,7 @@
     "build": "astro build",
     "check": "astro check",
     "lint": "oxlint src && eslint .",
-    "test": "tsx --test src/test/clips.test.ts"
+    "test": "tsx --test src/test/*.test.ts"
   },
   "dependencies": {
     "@astrojs/rss": "^4.0.18",

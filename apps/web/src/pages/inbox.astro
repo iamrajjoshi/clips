@@ -1,0 +1,263 @@
+---
+import Base from "@/layouts/Base.astro";
+import "@/styles/inbox.css";
+---
+
+<Base title="Reading inbox" description="A browser-local reading queue for links and references." pathname="/inbox" noindex>
+  <section class="inbox" data-reading-inbox>
+    <p class="inbox-eyebrow">A quieter place for saved links</p>
+    <h1>Reading inbox</h1>
+    <p class="inbox-intro">Choose the next useful thing to read. Keep references out of your reading queue and let stale saves go.</p>
+    <p class="inbox-privacy">This queue lives in this browser’s site storage. It is not published with Raj’s clips or synced between devices. Export a backup before clearing browser data.</p>
+
+    <form class="inbox-add" id="inbox-add">
+      <h2>Add a link</h2>
+      <div class="inbox-add-fields">
+        <label>URL <input name="url" type="url" required placeholder="https://…" /></label>
+        <label>Title <input name="title" type="text" placeholder="Optional" /></label>
+        <label>Topic <input name="topic" type="text" placeholder="e.g. inference" /></label>
+        <button type="submit">Save to backlog</button>
+      </div>
+    </form>
+
+    <details class="inbox-transfer">
+      <summary>Import or export your inbox</summary>
+      <p>Import the classified <code>reading-inbox.json</code> or an export from this page. Matching URLs are skipped, so your reading progress stays intact.</p>
+      <label>Import JSON <input id="inbox-import" type="file" accept=".json,application/json" /></label>
+      <button id="inbox-export" type="button">Export JSON backup</button>
+    </details>
+
+    <div class="inbox-tools">
+      <label>View
+        <select id="inbox-view">
+          <option value="up-next">Up next</option>
+          <option value="backlog">Reading backlog</option>
+          <option value="reference">References</option>
+          <option value="watch">Watch</option>
+          <option value="done">Done</option>
+          <option value="dropped">Let go</option>
+          <option value="all">Everything</option>
+        </select>
+      </label>
+      <label>Topic <select id="inbox-topic"><option value="">All topics</option></select></label>
+      <label class="inbox-query">Search <input id="inbox-query" type="search" placeholder="Title, note, or topic" /></label>
+    </div>
+    <p class="inbox-status" id="inbox-status" role="status" aria-live="polite"></p>
+    <div class="inbox-list" id="inbox-list"></div>
+    <noscript><p>Enable JavaScript to use the browser-local inbox.</p></noscript>
+  </section>
+</Base>
+
+<template id="inbox-card">
+  <article class="inbox-card">
+    <div class="inbox-card-heading">
+      <h2><a data-field="url" target="_blank" rel="noopener noreferrer"><span data-field="title"></span> <span aria-hidden="true">↗</span></a></h2>
+      <span class="inbox-card-topic" data-field="topic"></span>
+    </div>
+    <p class="inbox-card-source" data-field="host"></p>
+    <p class="inbox-card-rationale" data-field="rationale"></p>
+    <p class="inbox-card-note" data-field="note"></p>
+    <p class="inbox-card-overlap" data-field="overlap"></p>
+    <div class="inbox-card-actions">
+      <button type="button" data-action="done">Mark done</button>
+      <button type="button" data-action="next">Up next</button>
+      <button type="button" data-action="backlog">Backlog</button>
+      <button type="button" data-action="reference">Reference</button>
+      <button type="button" data-action="drop">Let go</button>
+    </div>
+    <details class="inbox-card-edit">
+      <summary>Edit details</summary>
+      <form data-edit>
+        <label>Title <input name="title" required /></label>
+        <label>Topic <input name="topic" /></label>
+        <label>Category <select name="category"><option value="read">Read</option><option value="reference">Reference</option><option value="watch">Watch</option><option value="skip">Let go</option></select></label>
+        <label>Note <textarea name="note" rows="3" placeholder="One useful takeaway or reason to keep it"></textarea></label>
+        <button type="submit">Save details</button>
+      </form>
+    </details>
+  </article>
+</template>
+
+<script>
+  import { canonicalUrl, isUpNext, mergeReadingItems, parseReadingItem, type ReadingItem, type ReadingCategory } from "@/lib/reading-inbox";
+
+  const storageKey = "clip-reading-inbox-v1";
+  const root = document.querySelector<HTMLElement>("[data-reading-inbox]");
+  const list = document.querySelector<HTMLElement>("#inbox-list");
+  const status = document.querySelector<HTMLElement>("#inbox-status");
+  const cardTemplate = document.querySelector<HTMLTemplateElement>("#inbox-card");
+  const view = document.querySelector<HTMLSelectElement>("#inbox-view");
+  const topic = document.querySelector<HTMLSelectElement>("#inbox-topic");
+  const query = document.querySelector<HTMLInputElement>("#inbox-query");
+  let items: ReadingItem[] = [];
+  let message = "";
+
+  function load(): void {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) items = mergeReadingItems([], JSON.parse(saved)).items;
+    } catch {
+      message = "This browser could not load the saved inbox. Import a backup to restore it.";
+    }
+    render();
+  }
+
+  function save(): void {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(items));
+    } catch {
+      message = "Could not save to browser storage. Export a JSON backup before leaving this page.";
+    }
+    render();
+  }
+
+  function matchesView(item: ReadingItem, selected: string): boolean {
+    if (selected === "all") return true;
+    if (selected === "done") return item.status === "done";
+    if (selected === "dropped") return item.category === "skip" || item.status === "dismissed";
+    if (item.status === "done" || item.status === "dismissed" || item.category === "skip") return false;
+    if (selected === "up-next") return isUpNext(item);
+    if (selected === "backlog") return item.category === "read" && !isUpNext(item);
+    return item.category === selected;
+  }
+
+  function render(): void {
+    if (!root || !list || !status || !cardTemplate || !view || !topic || !query) return;
+    const selectedTopic = topic.value;
+    const topics = [...new Set(items.map((item) => item.topic).filter(Boolean))].sort();
+    topic.replaceChildren(new Option("All topics", ""), ...topics.map((name) => new Option(name, name)));
+    topic.value = selectedTopic;
+    const terms = query.value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    const shown = items.filter((item) => matchesView(item, view.value)
+      && (!topic.value || item.topic === topic.value)
+      && terms.every((term) => [item.title, item.topic, item.note, item.rationale, item.sourceText].join(" ").toLocaleLowerCase().includes(term)));
+    shown.sort((a, b) => a.priority - b.priority || Number(a.id) - Number(b.id) || a.title.localeCompare(b.title));
+    const fragment = document.createDocumentFragment();
+    for (const item of shown) {
+      const card = cardTemplate.content.firstElementChild!.cloneNode(true) as HTMLElement;
+      card.dataset.url = canonicalUrl(item.url) ?? "";
+      const field = (name: string) => card.querySelector<HTMLElement>(`[data-field="${name}"]`)!;
+      (field("url") as HTMLAnchorElement).href = item.url;
+      field("title").textContent = item.title;
+      field("topic").textContent = item.topic || item.category;
+      field("host").textContent = new URL(item.url).hostname;
+      field("rationale").textContent = item.rationale;
+      field("rationale").hidden = !item.rationale;
+      field("note").textContent = item.note;
+      field("note").hidden = !item.note;
+      field("overlap").textContent = item.duplicateOf ? `Related to item #${item.duplicateOf}` : "";
+      field("overlap").hidden = !item.duplicateOf;
+      card.querySelector<HTMLButtonElement>('[data-action="next"]')!.hidden = isUpNext(item) || item.status === "done";
+      card.querySelector<HTMLButtonElement>('[data-action="backlog"]')!.hidden = item.category !== "read" || !isUpNext(item);
+      card.querySelector<HTMLButtonElement>('[data-action="done"]')!.hidden = item.status === "done" || item.category === "skip";
+      card.querySelector<HTMLButtonElement>('[data-action="reference"]')!.hidden = item.category === "reference";
+      card.querySelector<HTMLButtonElement>('[data-action="drop"]')!.hidden = item.category === "skip";
+      const edit = card.querySelector<HTMLFormElement>("[data-edit]")!;
+      (edit.elements.namedItem("title") as HTMLInputElement).value = item.title;
+      (edit.elements.namedItem("topic") as HTMLInputElement).value = item.topic;
+      (edit.elements.namedItem("category") as HTMLSelectElement).value = item.category;
+      (edit.elements.namedItem("note") as HTMLTextAreaElement).value = item.note;
+      fragment.append(card);
+    }
+    list.replaceChildren(fragment);
+    const upNext = items.filter(isUpNext).length;
+    const summary = `${shown.length} shown · ${upNext}/5 up next · ${items.length} saved in this browser`;
+    status.textContent = message ? `${message} ${summary}` : summary;
+    if (!shown.length) {
+      const empty = document.createElement("p");
+      empty.className = "inbox-empty";
+      empty.textContent = items.length ? "Nothing in this view. Try another filter." : "Your inbox is empty. Add a link or import your classified bookmarks above.";
+      list.append(empty);
+    }
+  }
+
+  document.querySelector<HTMLFormElement>("#inbox-add")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    const data = new FormData(form);
+    const url = String(data.get("url") ?? "");
+    const item = parseReadingItem({ id: crypto.randomUUID(), url, title: data.get("title"), topic: data.get("topic"), category: "read", priority: 2, status: "unread" });
+    if (!item) { message = "Enter a valid http or https URL."; render(); return; }
+    const result = mergeReadingItems(items, [item]);
+    if (!result.added) { message = "That link is already in your inbox."; render(); return; }
+    items = result.items;
+    message = "Saved to the reading backlog.";
+    form.reset();
+    view!.value = "backlog";
+    save();
+  });
+
+  document.querySelector<HTMLInputElement>("#inbox-import")?.addEventListener("change", async (event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const result = mergeReadingItems(items, JSON.parse(await file.text()));
+      items = result.items;
+      message = `Imported ${result.added}; skipped ${result.duplicates} matching links and ${result.invalid} invalid rows.`;
+      save();
+    } catch (error) {
+      message = error instanceof Error ? error.message : "Could not read this JSON file.";
+      render();
+    }
+    input.value = "";
+  });
+
+  document.querySelector<HTMLButtonElement>("#inbox-export")?.addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify({ version: 1, items }, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "clip-reading-inbox.json";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  });
+
+  list?.addEventListener("click", (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>("button[data-action]");
+    const card = button?.closest<HTMLElement>("[data-url]");
+    const item = items.find((row) => canonicalUrl(row.url) === card?.dataset.url);
+    if (!item || !button) return;
+    const action = button.dataset.action;
+    if (action === "next") {
+      if (items.filter(isUpNext).length >= 5) { message = "Finish or move one of your five active reads first."; render(); return; }
+      item.category = "read"; item.status = "unread"; item.priority = 1;
+      view!.value = "up-next";
+    } else if (action === "backlog") {
+      item.priority = 2;
+    } else if (action === "done") {
+      item.status = "done"; item.priority = 0;
+    } else if (action === "reference") {
+      item.category = "reference"; item.status = "filed"; item.priority = 0;
+    } else if (action === "drop") {
+      item.category = "skip"; item.status = "dismissed"; item.priority = 0;
+    }
+    message = "Saved.";
+    save();
+  });
+
+  list?.addEventListener("submit", (event) => {
+    const form = event.target as HTMLFormElement;
+    if (!form.matches("[data-edit]")) return;
+    event.preventDefault();
+    const card = form.closest<HTMLElement>("[data-url]");
+    const item = items.find((row) => canonicalUrl(row.url) === card?.dataset.url);
+    if (!item) return;
+    const data = new FormData(form);
+    item.title = String(data.get("title") ?? "").trim() || item.title;
+    item.topic = String(data.get("topic") ?? "").trim();
+    item.note = String(data.get("note") ?? "").trim();
+    const category = String(data.get("category")) as ReadingCategory;
+    if (category !== item.category) {
+      item.category = category;
+      item.status = category === "reference" ? "filed" : category === "skip" ? "dismissed" : "unread";
+      item.priority = category === "read" || category === "watch" ? 2 : 0;
+    }
+    message = "Details saved.";
+    save();
+  });
+
+  for (const control of [view, topic, query]) {
+    control?.addEventListener(control === query ? "input" : "change", () => { message = ""; render(); });
+  }
+  load();
+</script>
