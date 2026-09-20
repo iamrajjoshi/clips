@@ -70,6 +70,7 @@ const isCollection = pathname === "/";
             {isCollection && <p class="collection-description">Links, notes, and things I want to come back to.</p>}
           </div>
           <ul class="site-actions">
+            <li><a class="site-nav-link" href="/inbox">Reading inbox</a></li>
             <li><a class="site-nav-link" href="https://rajjoshi.me/">About me <span aria-hidden="true">↗</span></a></li>
             {!isCollection && <li><ThemeToggle /></li>}
           </ul>
