@@ -71,7 +71,7 @@ export function getClipTileContent(clip: ClipEntry): ClipTileContent {
     case "image":
       return {
         title: getClipTitle(clip),
-        excerpt: truncateTileText(clip.body),
+        excerpt: truncateTileText(clip.body ?? ""),
         source: {
           label: data.sourceUrl ? getHostname(data.sourceUrl) : "Image",
           url: data.sourceUrl,
@@ -81,14 +81,14 @@ export function getClipTileContent(clip: ClipEntry): ClipTileContent {
     case "video":
       return {
         title: data.title,
-        excerpt: truncateTileText(clip.body),
+        excerpt: truncateTileText(clip.body ?? ""),
         source: { label: data.channel || data.provider, url: data.url },
         image: data.thumbnail,
       };
     case "note":
       return {
         title: "Saved note",
-        excerpt: truncateTileText(clip.body),
+        excerpt: truncateTileText(clip.body ?? ""),
         source: { label: "Note" },
       };
   }

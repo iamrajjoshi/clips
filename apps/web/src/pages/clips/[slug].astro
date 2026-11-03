@@ -5,7 +5,7 @@ import { getClipDescription, getClipSocialImage, getClipTitle, type ClipEntry } 
 import { getClipEntries } from "@/lib/content";
 
 export async function getStaticPaths() {
-  return (await getClipEntries()).map((clip) => ({ params: { slug: clip.slug }, props: { clip } }));
+  return (await getClipEntries()).map((clip) => ({ params: { slug: clip.id }, props: { clip } }));
 }
 
 const { clip } = Astro.props as { clip: ClipEntry };
