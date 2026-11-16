@@ -159,7 +159,7 @@ export function getClipDescription(clip: ClipEntry) {
         ? `${clip.data.channel} on ${clip.data.provider}`
         : `Saved from ${clip.data.provider}`;
     case "note":
-      return excerpt(clip.body, 160) || "A saved note.";
+      return excerpt(clip.body ?? "", 160) || "A saved note.";
   }
 }
 
@@ -179,7 +179,7 @@ export function getClipSourceLabel(clip: ClipEntry) {
 }
 
 export function getClipPermalink(clip: ClipEntry) {
-  return `/clips/${clip.slug}/`;
+  return `/clips/${clip.id}/`;
 }
 
 export function getClipOgImage(clip: ClipEntry) {
@@ -198,12 +198,12 @@ export function getClipOgImage(clip: ClipEntry) {
 }
 
 export function getClipSocialImage(clip: ClipEntry) {
-  return `/og/${clip.slug}.svg`;
+  return `/og/${clip.id}.svg`;
 }
 
 export function buildSearchIndex(clips: ClipEntry[]) {
   return sortClips(clips).map((clip) => ({
-    slug: clip.slug,
+    slug: clip.id,
     kind: clip.data.kind,
     title: getClipTitle(clip),
     description: getClipDescription(clip),

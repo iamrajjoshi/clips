@@ -38,8 +38,7 @@ function makeClip(kind: "note" | "link", overrides: Record<string, unknown> = {}
         });
 
   return {
-    id: `${slug}.md`,
-    slug,
+    id: slug,
     body: kind === "note" ? "a saved note body" : "link commentary",
     collection: "clips",
     data,
@@ -60,7 +59,7 @@ describe("clip helpers", () => {
       clippedAt: new Date("2026-04-18T00:00:00.000Z"),
     });
     assert.deepEqual(
-      sortClips([older, newer]).map((clip) => clip.slug),
+      sortClips([older, newer]).map((clip) => clip.id),
       ["newer", "older"],
     );
   });

@@ -106,7 +106,7 @@ export function buildOgSvg(clip?: ClipEntry) {
 export async function getStaticPaths() {
   return [
     { params: { slug: "site" }, props: {} },
-    ...(await getClipEntries()).map((clip) => ({ params: { slug: clip.slug }, props: { clip } })),
+    ...(await getClipEntries()).map((clip) => ({ params: { slug: clip.id }, props: { clip } })),
   ];
 }
 
